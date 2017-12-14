@@ -22,9 +22,14 @@ class AhoCorasick():
             self.make_goto()
             self.make_failure()
 
-    def add_words(self, keywords):
+    def add_words(self, keywords, make_AC=False):
         for keyword in keywords:
             self.keywords.append(keyword)
+        
+        if make_AC:
+            self.make_AC()
+    
+    def make_AC(self):
         self.goto = {}
         self.output = {}
         self.failure = {}

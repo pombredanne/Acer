@@ -1,5 +1,11 @@
 # Aho-corasick Algorithm
 
+# 安装
+        sudo pip2 install acer
+        or 
+        sudo pip2 --user install acer
+---
+
 # 用法
 
 ### 一般用法

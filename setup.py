@@ -13,8 +13,8 @@ setup(
     author = "yanwii",  
     author_email = "yanwii@outlook.com",
     packages = ['acer'],
-    package_dir = {"acer":"acer"},
-    package_data = {"acer":["model/*"]},
+    package_dir = {"":""},
+    package_data = {"":["model/*"]},
     platforms = "any",  
     scripts = [],  
 )   

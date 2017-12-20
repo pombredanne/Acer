@@ -12,16 +12,17 @@ class Trie:
             }
         self.status = 1
         self.output = {}
-
+        self.vocab = {"x":0}
     def add(self, word):
         branch = self.tree["root"]
         for index,i in enumerate(word):
             if i not in branch:
                 branch[i] = {}
-                branch[i]['status'] = self.status
-                self.status += 1
+                if i not in self.vocab:
+                    self.vocab[i] = max(self.vocab.values()) + 1
+                branch[i]['status'] = self.vocab.get(i)
             branch = branch[i]
-        branch['red'] = -1
+        branch['end'] = {"status":0}
         if branch['status'] not in self.output:
             self.output[branch['status']] = []
         if word not in self.output[branch['status']]:
@@ -33,7 +34,7 @@ class Trie:
             if i not in branch:
                 return False
             branch = branch[i]
-        return 'red' in branch
+        return 'end' in branch
 
 if __name__ == "__main__":
     trie = Trie()

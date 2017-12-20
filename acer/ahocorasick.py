@@ -16,17 +16,14 @@ class AhoCorasick():
         self.output = {}
         self.keywords = []
         self.failure = {}
+        self.vocab = {}
         self.child_status_tree = {}
         self.model_path = "./model/"
 
         self.base = []
         self.check = []
-        self.word_map = {}
-        self.index_to_state = {0:0}
-
-        if self.keywords:
-            self.make_goto()
-            self.make_failure()
+        self.word_map = []
+        self.status_to_index = {0:0}
 
     def add_words(self, keywords, make_AC=False):
         for keyword in keywords:
@@ -42,12 +39,12 @@ class AhoCorasick():
         self.failure_tree = {}
         self.child_tree = {}
 
-        self.base = np.zeros(len(self.keywords) + 10)
-        self.check = np.zeros(len(self.keywords) + 10)
-        self.is_output = np.zeros(len(self.keywords) + 10)
-        self.word_map = {}
+        self.base = np.zeros(len(self.keywords) + 30, dtype=int)
+        self.check = np.zeros(len(self.keywords) + 30, dtype=int)
+        self.is_output = np.zeros(len(self.keywords) + 30, dtype=int)
+        self.word_map = [0] * (len(self.keywords) + 30)
         self.make_goto()
-        self.make_failure()
+        #self.make_failure()
 
     def restore(self, path=''):
         model_path = path if path else self.model_path
@@ -75,110 +72,70 @@ class AhoCorasick():
     
 
     def double_array(self):
-        self.add_words([u'啊', u'阿根廷', u'阿胶', u'埃及', u'阿拉伯人', u'阿拉伯'], True)
+        self.add_words(["he", "sh", "his", "hi", "hsss", "hiss"], True)
         queue = []
-        tree = self.goto['root']
-        for i in tree:
-            if i != 'status' and i != 'red':
-                word = i
-                status = tree[i]['status']
-                child_tree = tree[i]
-                self.word_map[word] = status
-                self.index_to_state[status] = status
-                queue.append([word, status, child_tree])
+        self.base[0] = 1
+        queue.append(['root', 0, self.goto['root'], 0])
 
         while queue:
             node = queue.pop(0)
-            word, status, current_tree = node
-            if self.is_end(current_tree):
-                map_status = self.word_map.get(word, status)
-                self.is_output[map_status] = 1
-                continue
-            # find base and check
+            word, status, tree, pre_index = node
+            child_status = [tree[i]['status'] for i in tree if i != 'status']
             k = 0
-            child_status = [current_tree[i]['status'] for i in current_tree if i != 'status' and i != 'red']
             while True:
                 k += 1
-                tmp = sum(map(lambda x:self.base[x+k] + self.check[x+k], child_status))
+                tmp = sum(map(lambda x: self.check[x+k], child_status))
                 if tmp == 0:
-                    map_status = self.word_map.get(word, status)
-                    # tag output
-                    if status in self.output:
-                        self.is_output[map_status] = 1
-                    self.base[map_status] = k
-                    for i in current_tree:
-                        if i == 'status' or i == 'red':
+                    for i in tree:
+                        if i=='status':
                             continue
-                        child_word = i
-                        status = current_tree[i]['status']
-                        child_tree = current_tree[i]
-                        queue.append([child_word, status, child_tree])
-                        self.check[status+k] = map_status
-                        self.word_map[child_word] = status+k 
-                        self.index_to_state[status] = status + k
+                        char = i
+                        char_status = tree[i]['status']
+                        char_index = char_status + k
+                        
+                        self.check[char_index] = k
+                        self.word_map[char_index] = char
+
+                        self.base[pre_index] = k
+                        if i == "end":
+                            self.base[char_index] = -1
+                            
+                        child_tree = tree[i]
+                        child_status = tree[i]['status']
+                        queue.insert(0, [i, child_status, child_tree, char_index])
                     break
-        # loop base
-        for i in range(self.is_output.shape[0]):
-            if self.is_output[i] == 1:
-                if self.base[i] == 0:
-                    self.base[i] = -i
-                else:
-                    self.base[i] = -self.base[i]
-        self.base = self.base[1:]
-        self.check = self.check[1:]
-        self.make_failure_new()
+        print json.dumps(self.vocab, indent=2, ensure_ascii=False)
+        print self.check
+        print self.base
+        print self.word_map
+        print self.sub_search("hiss")
 
-    def make_failure_new(self): 
-        start = time.time()
+    def sub_search(self, string):
+        '''
+            前缀查询
+        '''
+        queue = []
+        queue.append([string, 1, ''])
+        result = []
+        while queue:
+            q = queue.pop(0)
+            string, pre_bp ,seg = q
+            char = string[0]
+            seg += string[0]
 
-        my_queue = []
-        node = [0, "root", self.goto['root']]
-        my_queue.append(node)
-        while my_queue:
-            node = my_queue.pop(0)
-            parent_status = node[0]
-            word = node[1]
-            tree = node[2]
-            current_status = tree['status']
-
-            # status tree
-            self.child_tree[current_status] = tree
-
-            # failure tree and failure map
-            if parent_status == 0:
-                self.failure[current_status] = 0
-            else:
-                # find failure
-                parent_failure_status = self.failure[parent_status]
-                parent_failure_tree = self.child_tree[parent_failure_status]
-                if word in parent_failure_tree:
-                    # the child status of the parent failure tree
-                    child_status = parent_failure_tree[word]['status']
-                    self.failure[current_status] = child_status
-                    if child_status in self.output:
-                        # fix 
-                        if current_status not in self.output:
-                            self.output[current_status] = []
-                        self.output[current_status].extend(self.output[child_status])
-
-                else:
-                    self.failure[current_status] = 0
-
-            for i in tree:
-                if i == 'status' or i == 'red':
-                    continue
-                parent_status = node[2]['status']
-                my_queue.append([parent_status, i, node[2][i]])
-        stop = time.time()
-        print("Make fail table costs {:.2f}".format(stop-start))
-
-        # map to index
-        self.fail = {}
-        for key,value in self.failure.items():
-            key = self.index_to_state.get(key)
-            value = self.index_to_state.get(value)
-            self.fail[key] = value
-        print self.fail
+            char_index = self.vocab.get(char, -1)
+            p = pre_bp + char_index
+            bp = self.base[p]
+            bbp = self.base[bp]
+            cbp = self.check[bp]
+            print bp, bbp, cbp
+            if bbp == -1 and (bp == cbp):
+                result.append(seg)
+            if len(string) == 1:
+                break
+            if string[1:]:
+                queue.append([string[1:], bp, seg])
+        return result
 
     def make_goto(self):
         start = time.time()
@@ -188,58 +145,24 @@ class AhoCorasick():
         self.goto = trie.tree
         self.goto['root']['status'] = 0
         self.output = trie.output
+        self.vocab = trie.vocab
         stop = time.time()
         #print("Make goto table costs {:.2f}".format(stop-start))
 
     def make_failure(self):
-        start = time.time()
+        queue = []
+        for i in self.goto['root']:
+            if i == 'status':
+                continue
+            char = i
+            tree = self.goto['root'][i]
+            char_index = self.vocab.get(i)
+            char_status = tree['status']
+            queue.append([char_index, 1])
 
-        my_queue = []
-        node = [0, "root", self.goto['root'], []]
-        my_queue.append(node)
-        while my_queue:
-            node = my_queue.pop(0)
-            parent_status = node[0]
-            word = node[1]
-            tree = node[2]
-            parent_path = node[3]
-            current_status = tree['status']
 
-            # status tree
-            #self.child_tree[current_status] = tree
-            if current_status not in self.child_status_tree:
-                self.child_status_tree[current_status] = []
-            self.child_status_tree[current_status] += parent_path + [word]
 
-            # failure tree and failure map
-            if parent_status == 0:
-                self.failure[current_status] = 0
-            else:
-                # find failure
-                parent_failure_status = self.failure[parent_status]
 
-                # change the regular tree to status tree
-                parent_failure_tree = self.get_child_tree(parent_failure_status)
-                #parent_failure_tree = self.child_tree[parent_failure_status]
-
-                if word in parent_failure_tree:
-                    # the child status of the parent failure tree
-                    child_status = parent_failure_tree[word]['status']
-                    self.failure[current_status] = child_status
-                    if child_status in self.output:
-                        if current_status not in self.output:
-                            self.output[current_status] = []
-                        self.output[current_status].extend(self.output[child_status])
-                else:
-                    self.failure[current_status] = 0
-
-            for i in tree:
-                if i == 'status' or i == 'red':
-                    continue
-                parent_status = node[2]['status']
-                my_queue.append([parent_status, i, node[2][i], parent_path+[word]])
-        stop = time.time()
-        #print("Make fail table costs {:.2f}".format(stop-start))
 
     def get_child_tree(self, status):
         path = self.child_status_tree[status]
@@ -296,7 +219,7 @@ class AhoCorasick():
         return {"result":output}
 
     def is_end(self, tree):
-        if tree.keys() == ['status', 'red'] or tree.keys() == ['red', 'status']:
+        if tree['status'] == -1:
             return True
         else:
             return False

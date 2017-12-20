@@ -108,9 +108,9 @@ class AhoCorasick():
         print self.check
         print self.base
         print self.word_map
-        print self.sub_search("hiss")
+        print self.prefix_search("hiss")
 
-    def sub_search(self, string):
+    def prefix_search(self, string):
         '''
             前缀查询
         '''
